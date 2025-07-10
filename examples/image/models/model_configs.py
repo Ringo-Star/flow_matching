@@ -63,6 +63,7 @@ MODEL_CONFIGS = {
         "resblock_updown": False,
         "use_new_attention_order": True,
         "with_fourier_features": False,
+        "predict_reverse": True,
     },
     "cifar10_discrete": {
         "in_channels": 3,

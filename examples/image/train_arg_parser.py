@@ -202,5 +202,9 @@ def get_args_parser():
         type=int,
         help="Number of sampling steps for discrete FM.",
     )
-
+    parser.add_argument(
+        "--predict_reverse",
+        action="store_true",
+        help="predict reverse velocity for biflow model feature.",
+    )
     return parser

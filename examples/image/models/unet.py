@@ -455,6 +455,8 @@ class UNetModel(nn.Module):
     :param resblock_updown: use residual blocks for up/downsampling.
     :param use_new_attention_order: use a different attention pattern for potentially
                                     increased efficiency.
+    :param predict_reverse: if True, the model will predict the reverse flow
+                            (i.e., from x_t to x_0) in addition to the forward flow
     """
 
     in_channels: int
@@ -480,6 +482,8 @@ class UNetModel(nn.Module):
 
     image_size: int = -1  # not used...
     _target_: str = "lib.models.gd_unet.UNetModel"
+
+    predict_reverse: bool = False
 
     def __post_init__(self):
         super().__init__()
@@ -662,6 +666,15 @@ class UNetModel(nn.Module):
             zero_module(conv_nd(self.dims, input_ch, self.out_channels, 3, padding=1)),
         )
 
+        # Optional output for reverse flow (if predict_reverse = True)
+        if self.predict_reverse:
+            self.out_reverse = nn.Sequential(
+                normalization(ch),
+                nn.SiLU(),
+                zero_module(conv_nd(self.dims, input_ch, self.out_channels, 3, padding=1)),
+            )
+
+
     def forward(self, x, timesteps, extra):
         """
         Apply the model to an input batch.
@@ -706,8 +719,20 @@ class UNetModel(nn.Module):
             h = torch.cat([h, hs.pop()], dim=1)
             h = module(h, emb)
         h = h.type(x.dtype)
-        result = self.out(h)
-        return result
+
+        # Forward flow prediction (u_t)
+        forward_result = self.out(h)
+        
+        # seperate prediction heads
+        if self.predict_reverse:
+            # Reverse flow prediction (from data to noise)
+            reverse_result = self.out_reverse(h)
+            return {
+                "forward": forward_result,  # Flow from noise to data (x0 -> x1)
+                "reverse": reverse_result   # Flow from data to noise (x1 -> x0)
+            }
+        else:
+            return forward_result
 
 
 # Based on https://github.com/google-research/vdm/blob/main/model_vdm.py

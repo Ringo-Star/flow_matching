@@ -93,12 +93,22 @@ def train_one_epoch(
                 t = skewed_timestep_sample(samples.shape[0], device=device)
             else:
                 t = torch.torch.rand(samples.shape[0]).to(device)
+
             path_sample = path.sample(t=t, x_0=noise, x_1=samples)
             x_t = path_sample.x_t
             u_t = path_sample.dx_t
 
-            with torch.cuda.amp.autocast():
-                loss = torch.pow(model(x_t, t, extra=conditioning) - u_t, 2).mean()
+            if args.predict_reverse:
+                path_sample_reverse = path.sample(t=1-t, x_0=samples, x_1=noise)
+                x_t_reverse = path_sample_reverse.x_t
+                u_t_reverse = path_sample_reverse.dx_t
+
+                with torch.amp.autocast('cuda'):
+                    loss = torch.pow(model(x_t, t, extra=conditioning)["forward"] - u_t, 2).mean() + torch.pow(model(x_t_reverse, t, extra=conditioning)["reverse"] - u_t_reverse, 2).mean()
+
+            else:
+                with torch.amp.autocast('cuda'):
+                    loss = torch.pow(model(x_t, t, extra=conditioning) - u_t, 2).mean()
 
         loss_value = loss.item()
         batch_loss.update(loss)
